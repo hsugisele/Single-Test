@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>英文單字聽力小考工具 Pro</title>
+    <title>英文單字聽力小考工具 Pro (v3)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Microsoft JhengHei';
@@ -48,6 +48,27 @@
             box-sizing: border-box;
         }
 
+        /* 語速按鈕樣式 */
+        .rate-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .btn-rate {
+            background-color: #ecf0f1;
+            color: #7f8c8d;
+            border: 2px solid #bdc3c7;
+            padding: 5px 15px;
+            cursor: pointer;
+            border-radius: 20px;
+            margin-right: 5px;
+            transition: 0.3s;
+        }
+        .btn-rate.active {
+            background-color: #3498db;
+            color: white;
+            border-color: #2980b9;
+        }
+
         .import-area {
             text-align: left;
             margin-bottom: 10px;
@@ -83,6 +104,8 @@
         .btn-secondary:hover { background-color: #7f8c8d; }
         .btn-success { background-color: #2ecc71; color: white; }
         .btn-success:hover { background-color: #27ae60; }
+        .btn-warning { background-color: #f1c40f; color: white; }
+        .btn-warning:hover { background-color: #f39c12; }
         .btn-import { background-color: #f39c12; color: white; margin-bottom: 10px; }
 
         .status-text { font-size: 28px; font-weight: bold; color: #e74c3c; margin: 30px 0 10px; }
@@ -104,7 +127,7 @@
 
 <div class="container">
     <div id="setup-section">
-        <h1>英文單字小考設定</h1>
+        <h1>單字小考設定</h1>
         
         <div class="settings-grid">
             <div class="settings-item">
@@ -115,6 +138,13 @@
                 <label>間隔秒數 (秒)</label>
                 <input type="number" id="wait-seconds" value="30" min="1">
             </div>
+        </div>
+
+        <div class="rate-group">
+            <label style="font-size: 14px; font-weight: bold; display: block; margin-bottom: 5px;">語音速度</label>
+            <button class="btn-rate" onclick="setRate(1.0)">1.0X</button>
+            <button class="btn-rate active" onclick="setRate(0.85)">0.85X</button>
+            <button class="btn-rate" onclick="setRate(0.65)">0.65X</button>
         </div>
 
         <div class="import-area">
@@ -129,10 +159,12 @@
     </div>
 
     <div id="quiz-section" style="display:none;">
-        <h1>聽力測驗(語音播放中，請開啟聲音)</h1>
+        <h1>聽力測驗</h1>
         <div id="status" class="status-text">準備開始...</div>
         <div id="timer" class="timer-text"></div>
         
+        <button id="pause-btn" class="btn btn-warning" onclick="togglePause()">⏸ 暫停</button>
+
         <div style="margin-top: 50px; border-top: 1px solid #eee; padding-top: 20px;">
             <button class="btn btn-secondary" onclick="stopAndBack()">← 回上一頁</button>
             <button class="btn btn-success" onclick="restartQuiz()">↻ 重新測驗</button>
@@ -153,6 +185,51 @@
     let currentIndex = 0;
     let countdownInterval;
     let isStopped = false;
+    
+    // 新增狀態變數
+    let currentRate = 0.85;
+    let isPaused = false;
+    let currentSpeakTimes = 0;
+    let currentWaitSeconds = 0;
+    let quizPhase = 'speaking'; // 'speaking' 或 'counting'
+
+    // --- 語速設定 ---
+    function setRate(rate) {
+        currentRate = rate;
+        const btns = document.querySelectorAll('.btn-rate');
+        btns.forEach(btn => {
+            if(parseFloat(btn.innerText) === rate) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    // --- 暫停/播放切換 ---
+    function togglePause() {
+        if (isPaused) {
+            // 繼續
+            isPaused = false;
+            document.getElementById('pause-btn').innerText = '⏸ 暫停';
+            document.getElementById('pause-btn').classList.replace('btn-primary', 'btn-warning');
+            
+            if (quizPhase === 'speaking') {
+                playWordCycle(); // 重新開始當前的朗讀循環
+            } else {
+                startTimer(currentWaitSeconds); // 繼續剩餘的倒數
+            }
+        } else {
+            // 暫停
+            isPaused = true;
+            document.getElementById('pause-btn').innerText = '▶ 繼續';
+            document.getElementById('pause-btn').classList.replace('btn-warning', 'btn-primary');
+            
+            window.speechSynthesis.cancel(); // 停止語音
+            clearInterval(countdownInterval); // 停止計時
+            document.getElementById('timer').innerText = '(已暫停)';
+        }
+    }
 
     function autoResize(textarea) {
         textarea.style.height = 'auto';
@@ -162,7 +239,6 @@
     document.getElementById('file-input').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        
         const reader = new FileReader();
         reader.onload = function(e) {
             const textarea = document.getElementById('word-input');
@@ -176,7 +252,6 @@
         const input = document.getElementById('word-input').value;
         const lines = input.split('\n');
         rawWordList = [];
-
         for (let line of lines) {
             if (line.trim() !== '') {
                 let parts = line.split(/[,，]/); 
@@ -185,68 +260,70 @@
                 if (engWord) rawWordList.push({ eng: engWord, cht: chtWord });
             }
         }
-
         if (rawWordList.length === 0) {
             alert('請輸入或匯入單字！');
             return;
         }
-
         startNewQuizSession();
     }
 
     function startNewQuizSession() {
         isStopped = false;
+        isPaused = false;
+        document.getElementById('pause-btn').innerText = '⏸ 暫停';
+        document.getElementById('pause-btn').style.display = 'inline-block';
+
         currentQuizList = [...rawWordList];
         for (let i = currentQuizList.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [currentQuizList[i], currentQuizList[j]] = [currentQuizList[j], currentQuizList[i]];
         }
-
         currentIndex = 0;
         document.getElementById('setup-section').style.display = 'none';
         document.getElementById('quiz-section').style.display = 'block';
         document.getElementById('result-section').style.display = 'none';
         document.getElementById('show-answer-btn').style.display = 'none';
         
-        playNextWord();
+        prepareNextWord();
     }
 
-    function playNextWord() {
-        if (isStopped) return;
-
+    function prepareNextWord() {
         if (currentIndex >= currentQuizList.length) {
             document.getElementById('status').innerText = '測驗完畢！';
             document.getElementById('timer').innerText = '';
             document.getElementById('show-answer-btn').style.display = 'inline-block';
+            document.getElementById('pause-btn').style.display = 'none';
             return;
         }
+        currentSpeakTimes = 0;
+        playWordCycle();
+    }
 
+    function playWordCycle() {
+        if (isStopped || isPaused) return;
+        
+        quizPhase = 'speaking';
         const speechCount = parseInt(document.getElementById('speech-count').value) || 2;
         const waitSeconds = parseInt(document.getElementById('wait-seconds').value) || 30;
         const word = currentQuizList[currentIndex];
         
         document.getElementById('status').innerText = `第 ${currentIndex + 1} 題 / 共 ${currentQuizList.length} 題`;
+        document.getElementById('timer').innerText = `朗讀中 (第 ${currentSpeakTimes + 1} 次)...`;
         
-        let speakTimes = 0;
-        function loopSpeak() {
-            if (isStopped) return;
-            document.getElementById('timer').innerText = `朗讀中 (第 ${speakTimes + 1} 次)...`;
-            
-            speakWord(word.eng, () => {
-                speakTimes++;
-                if (speakTimes < speechCount) {
-                    setTimeout(loopSpeak, 1500); 
-                } else {
-                    startTimer(waitSeconds);
-                }
-            });
-        }
-        loopSpeak();
+        speakWord(word.eng, () => {
+            if (isPaused) return;
+            currentSpeakTimes++;
+            if (currentSpeakTimes < speechCount) {
+                setTimeout(playWordCycle, 1500); 
+            } else {
+                currentWaitSeconds = waitSeconds;
+                startTimer(currentWaitSeconds);
+            }
+        });
     }
 
     function speakWord(text, callback) {
         window.speechSynthesis.cancel(); 
-        
         let textToSpeak = text;
         textToSpeak = textToSpeak.replace(/\//g, ', ');
         textToSpeak = textToSpeak.replace(/\.\.\./g, ', ');
@@ -255,28 +332,31 @@
 
         const msg = new SpeechSynthesisUtterance(textToSpeak);
         msg.lang = 'en-US';
-        msg.rate = 0.85;
+        msg.rate = currentRate; // 使用設定的語速
         msg.onend = callback;
         window.speechSynthesis.speak(msg);
     }
 
     function startTimer(seconds) {
-        let timeLeft = seconds;
-        document.getElementById('timer').innerText = `等待下一題：${timeLeft} 秒`;
+        if (isStopped || isPaused) return;
+        
+        quizPhase = 'counting';
+        currentWaitSeconds = seconds;
+        document.getElementById('timer').innerText = `等待下一題：${currentWaitSeconds} 秒`;
         
         clearInterval(countdownInterval);
         countdownInterval = setInterval(() => {
-            if (isStopped) {
+            if (isStopped || isPaused) {
                 clearInterval(countdownInterval);
                 return;
             }
-            timeLeft--;
-            document.getElementById('timer').innerText = `等待下一題：${timeLeft} 秒`;
+            currentWaitSeconds--;
+            document.getElementById('timer').innerText = `等待下一題：${currentWaitSeconds} 秒`;
             
-            if (timeLeft <= 0) {
+            if (currentWaitSeconds <= 0) {
                 clearInterval(countdownInterval);
                 currentIndex++;
-                playNextWord();
+                prepareNextWord();
             }
         }, 1000);
     }
@@ -299,7 +379,6 @@
     function showAnswers() {
         document.getElementById('quiz-section').style.display = 'none';
         document.getElementById('result-section').style.display = 'block';
-        
         const list = document.getElementById('answer-list');
         list.innerHTML = '';
         currentQuizList.forEach((w, i) => {
@@ -309,16 +388,10 @@
         });
     }
 
-    // --- 新增：保留資料回首頁的函數 ---
     function backToHome() {
-        // 隱藏解答區
         document.getElementById('result-section').style.display = 'none';
-        // 顯示設定與輸入區
         document.getElementById('setup-section').style.display = 'block';
-        
-        // 重新計算文字框高度，確保從隱藏狀態恢復時版面正常
-        const textarea = document.getElementById('word-input');
-        autoResize(textarea);
+        autoResize(document.getElementById('word-input'));
     }
 </script>
 
