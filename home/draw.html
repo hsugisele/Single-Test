@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>專業抽籤管理工具 - 慶祝儀式版</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --secondary: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+        }
+
+        body {
+            font-family: -apple-system, "微軟正黑體", sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 1100px;
+            display: grid;
+            grid-template-columns: 350px 1fr 300px;
+            gap: 20px;
+            position: relative; /* For confetti */
+            overflow: hidden; /* Prevent confetti from scrolling */
+        }
+
+        @media (max-width: 1000px) {
+            .container { grid-template-columns: 1fr; }
+        }
+
+        /* 左側管理區 */
+        .sidebar {
+            border-right: 1px solid #e2e8f0;
+            padding-right: 20px;
+        }
+
+        .input-box {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .input-group { display: flex; flex-direction: column; gap: 10px; }
+        
+        input {
+            padding: 10px;
+            border: 2px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        /* 項目清單管理 */
+        .manage-list {
+            height: 400px;
+            overflow-y: auto;
+        }
+
+        .manage-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fff;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            font-size: 14px;
+        }
+
+        .manage-item input[type="number"] {
+            width: 50px;
+            padding: 4px;
+            margin: 0 5px;
+        }
+
+        .btn-del { color: var(--danger); cursor: pointer; border: none; background: none; font-weight: bold; }
+
+        /* 中間輪盤區 */
+        .wheel-section { text-align: center; }
+        #wheel-wrapper {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+        }
+        #pointer {
+            position: absolute;
+            top: -10px; left: 50%;
+            transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #1e293b;
+            z-index: 20;
+        }
+        canvas { width: 100%; height: 100%; transition: transform 4s cubic-bezier(0.1, 0, 0.2, 1); }
+
+        /* 右側紀錄區 */
+        .history-panel {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        #historyList { height: 500px; overflow-y: auto; }
+
+        /* 特效 */
+        #winner-overlay {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: rgba(255, 255, 255, 0.95); /* Slightly transparent white */
+            padding: 80px 120px; /* Bigger padding */
+            border-radius: 50px; /* Large round corners */
+            box-shadow: 0 15px 50px rgba(0,0,0,0.4);
+            z-index: 1000;
+            text-align: center;
+            transition: 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: auto;
+            max-width: 90vw;
+            pointer-events: none; /* Let clicks pass through when not visible */
+        }
+        #winner-overlay.show { transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-spin { background: var(--secondary); color: white; border: none; padding: 15px; border-radius: 10px; width: 100%; cursor: pointer; font-size: 1.2rem; font-weight: bold; margin-top: 20px; }
+
+        /* Confetti */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1001; /* Above winner overlay */
+            transform-origin: 50% 50%;
+        }
+
+        /* Confetti Animation (Keyframes generated dynamically in JS) */
+        @keyframes confettiFall {
+            0% { transform: translate(0, 0) rotateX(0deg) rotateY(0deg) rotateZ(0deg); opacity: 1; }
+            100% { transform: translate(var(--confetti-x), var(--confetti-y)) rotateX(var(--confetti-rx)) rotateY(var(--confetti-ry)) rotateZ(var(--confetti-rz)); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="confettiContainer">
+    <div class="sidebar">
+        <h3>🛠 籤桶管理</h3>
+        <div class="input-box">
+            <div class="input-group">
+                <input type="text" id="nameInput" placeholder="名稱 (如：王小明)">
+                <input type="number" id="countInput" value="1" min="1" placeholder="數量">
+                <button class="btn-primary" onclick="addOrUpdateItem()">加入 / 更新</button>
+            </div>
+        </div>
+        
+        <div class="manage-list" id="manageList">
+            </div>
+    </div>
+
+    <div class="wheel-section">
+        <h2 style="margin-top:0">🎡 抽籤大輪盤</h2>
+        <div id="wheel-wrapper">
+            <div id="pointer"></div>
+            <canvas id="wheelCanvas" width="500" height="500"></canvas>
+        </div>
+        <button class="btn-spin" id="spinBtn" onclick="startSpin()">開始抽籤</button>
+        <p>目前籤桶內總數：<strong id="totalDisplay">0</strong></p>
+    </div>
+
+    <div class="history-panel">
+        <h3 style="margin-top:0">📜 獲獎紀錄</h3>
+        <div id="historyList"></div>
+    </div>
+</div>
+
+<div id="winner-overlay">
+    <h1 id="winnerName" style="font-size: 5rem; margin: 0; color: #1e293b;"></h1> <p style="color: #64748b; font-size: 1.5rem; margin-top: 10px;">恭喜中獎！</p>
+</div>
+
+<script>
+    // 使用物件存儲，Key 為名字，Value 為數量
+    let itemMap = {};
+    let pool = [];
+    let isSpinning = false;
+    let rotation = 0;
+
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#06b6d4', '#475569'];
+
+    function addOrUpdateItem() {
+        const name = document.getElementById('nameInput').value.trim();
+        const count = parseInt(document.getElementById('countInput').value);
+        if (!name || isNaN(count) || count < 0) return;
+
+        if (count === 0) {
+            delete itemMap[name];
+        } else {
+            itemMap[name] = count;
+        }
+
+        renderAll();
+        document.getElementById('nameInput').value = '';
+        document.getElementById('nameInput').focus();
+    }
+
+    function updateItemCount(name, newCount) {
+        newCount = parseInt(newCount);
+        if (newCount <= 0) {
+            delete itemMap[name];
+        } else {
+            itemMap[name] = newCount;
+        }
+        renderAll();
+    }
+
+    function deleteItem(name) {
+        delete itemMap[name];
+        renderAll();
+    }
+
+    function renderAll() {
+        // 1. 更新管理清單介面
+        const listEl = document.getElementById('manageList');
+        listEl.innerHTML = '';
+        pool = [];
+
+        for (let name in itemMap) {
+            const count = itemMap[name];
+            // 填充到抽籤池
+            for (let i = 0; i < count; i++) { pool.push(name); }
+
+            // 建立管理列
+            const div = document.createElement('div');
+            div.className = 'manage-item';
+            div.innerHTML = `
+                <span style="font-weight:bold">${name}</span>
+                <div>
+                    <input type="number" value="${count}" min="1" onchange="updateItemCount('${name}', this.value)">
+                    <button class="btn-del" onclick="deleteItem('${name}')">✕</button>
+                </div>
+            `;
+            listEl.appendChild(div);
+        }
+
+        // 2. 打亂池子並重繪輪盤
+        shuffle(pool);
+        updateWheel();
+    }
+
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+    }
+
+    function updateWheel() {
+        document.getElementById('totalDisplay').innerText = pool.length;
+        const size = canvas.width;
+        const center = size / 2;
+        ctx.clearRect(0, 0, size, size);
+
+        if (pool.length === 0) {
+            ctx.beginPath();
+            ctx.arc(center, center, center - 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fill();
+            return;
+        }
+
+        const arcSize = (Math.PI * 2) / pool.length;
+        pool.forEach((text, i) => {
+            const angle = i * arcSize;
+            ctx.beginPath();
+            ctx.moveTo(center, center);
+            ctx.arc(center, center, center - 10, angle, angle + arcSize);
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.fill();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.save();
+            ctx.translate(center, center);
+            ctx.rotate(angle + arcSize / 2);
+            ctx.textAlign = "right";
+            ctx.fillStyle = "white";
+            ctx.font = pool.length > 30 ? "10px sans-serif" : "bold 14px sans-serif";
+            ctx.fillText(text.substring(0, 7), center - 30, 5);
+            ctx.restore();
+        });
+    }
+
+    function startSpin() {
+        if (isSpinning || pool.length === 0) return;
+        isSpinning = true;
+        document.getElementById('spinBtn').disabled = true;
+
+        const extraDeg = Math.floor(Math.random() * 360);
+        rotation += (3600 + extraDeg);
+        canvas.style.transform = `rotate(${rotation}deg)`;
+
+        setTimeout(() => {
+            const realAngle = (rotation % 360);
+            const arcDeg = 360 / pool.length;
+            const winIdx = Math.floor((360 - (realAngle % 360) + 270) % 360 / arcDeg);
+            const winner = pool[winIdx];
+
+            // 顯示特效
+            showCelebration(winner);
+
+            // 邏輯處理：從 itemMap 中完全刪除該項
+            setTimeout(() => {
+                delete itemMap[winner];
+                addHistory(winner);
+                renderAll();
+                // isSpinning/disabled reset is handled inside showCelebration's delayed return
+            }, 3500); // Give time for celebration
+
+        }, 4000);
+    }
+
+    function showCelebration(name) {
+        const overlay = document.getElementById('winner-overlay');
+        document.getElementById('winnerName').innerText = `🎊 ${name}`;
+        overlay.classList.add('show');
+
+        // Start Confetti
+        const numConfetti = 300;
+        const container = document.getElementById('confettiContainer');
+        const confettiColors = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#a78bfa', '#f472b6'];
+
+        for (let i = 0; i < numConfetti; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.background = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+            confetti.style.left = `50%`; /* Start from middle */
+            confetti.style.top = `50%`;
+            confetti.style.width = `${Math.random() * 15 + 5}px`; /* Various sizes */
+            confetti.style.height = `${Math.random() * 15 + 5}px`;
+            confetti.style.borderRadius = `${Math.random() > 0.5 ? '50%' : '0'}`; /* mix of circles and squares */
+
+            // Randomize trajectory (fall from center outwards)
+            const targetX = (Math.random() - 0.5) * 600; // Left/Right spread
+            const targetY = Math.random() * 800 + 200; // Fall down distance
+            const targetRX = (Math.random() - 0.5) * 1080;
+            const targetRY = (Math.random() - 0.5) * 1080;
+            const targetRZ = (Math.random() - 0.5) * 1080;
+
+            confetti.style.setProperty('--confetti-x', `${targetX}px`);
+            confetti.style.setProperty('--confetti-y', `${targetY}px`);
+            confetti.style.setProperty('--confetti-rx', `${targetRX}deg`);
+            confetti.style.setProperty('--confetti-ry', `${targetRY}deg`);
+            confetti.style.setProperty('--confetti-rz', `${targetRZ}deg`);
+
+            confetti.style.animation = `confettiFall ${Math.random() * 2 + 1.5}s ease-out forwards`; /* Random fall time */
+            confetti.style.animationDelay = `${Math.random() * 0.3}s`; /* Slight delay spread */
+
+            container.appendChild(confetti);
+
+            // Clean up confetti elements
+            setTimeout(() => {
+                confetti.remove();
+            }, (Math.random() * 2 + 2) * 1000);
+        }
+
+        // Delayed reset
+        setTimeout(() => {
+            overlay.classList.remove('show');
+            isSpinning = false;
+            document.getElementById('spinBtn').disabled = false;
+        }, 3500);
+    }
+
+    function addHistory(name) {
+        const list = document.getElementById('historyList');
+        const div = document.createElement('div');
+        div.style = "background:white; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid var(--secondary); display:flex; justify-content:space-between;";
+        div.innerHTML = `<span>${name}</span> <span style="color:#94a3b8; font-size:0.8rem;">${new Date().toLocaleTimeString()}</span>`;
+        list.prepend(div);
+    }
+</script>
+
+</body>
+</html>
