@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>英文單字聽力小考工具 Pro (v3)</title>
+    <title>英文單字聽力小考工具 Pro (v7 雙版本題庫)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Microsoft JhengHei';
@@ -48,7 +48,6 @@
             box-sizing: border-box;
         }
 
-        /* 語速按鈕樣式 */
         .rate-group {
             text-align: left;
             margin-bottom: 20px;
@@ -69,11 +68,37 @@
             border-color: #2980b9;
         }
 
-        .import-area {
+        .tools-area {
             text-align: left;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px dashed #ccc;
         }
-        
+        .tools-area label {
+            font-size: 14px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        .select-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #aaa;
+            font-size: 14px;
+            flex: 1;
+            min-width: 120px;
+            background-color: white;
+        }
+
         textarea {
             width: 100%;
             min-height: 120px;
@@ -96,7 +121,7 @@
             border-radius: 6px;
             cursor: pointer;
             transition: 0.3s;
-            margin: 5px;
+            margin: 5px 5px 5px 0;
         }
         .btn-primary { background-color: #3498db; color: white; }
         .btn-primary:hover { background-color: #2980b9; }
@@ -106,7 +131,11 @@
         .btn-success:hover { background-color: #27ae60; }
         .btn-warning { background-color: #f1c40f; color: white; }
         .btn-warning:hover { background-color: #f39c12; }
-        .btn-import { background-color: #f39c12; color: white; margin-bottom: 10px; }
+        
+        .btn-bank { background-color: #9b59b6; color: white; font-size: 14px; padding: 8px 15px;}
+        .btn-bank:hover { background-color: #8e44ad; }
+        .btn-import { background-color: #e67e22; color: white; font-size: 14px; padding: 8px 15px;}
+        .btn-import:hover { background-color: #d35400; }
 
         .status-text { font-size: 28px; font-weight: bold; color: #e74c3c; margin: 30px 0 10px; }
         .timer-text { font-size: 20px; color: #7f8c8d; margin-bottom: 30px; height: 24px; }
@@ -127,7 +156,7 @@
 
 <div class="container">
     <div id="setup-section">
-        <h1>單字小考設定</h1>
+        <h1>英文單字小考設定</h1>
         
         <div class="settings-grid">
             <div class="settings-item">
@@ -135,8 +164,8 @@
                 <input type="number" id="speech-count" value="2" min="1">
             </div>
             <div class="settings-item">
-                <label>下一題間隔秒數 (秒)</label>
-                <input type="number" id="wait-seconds" value="30" min="1">
+                <label>下題間隔秒數 (秒)</label>
+                <input type="number" id="wait-seconds" value="5" min="1">
             </div>
         </div>
 
@@ -145,21 +174,37 @@
             <button class="btn-rate" onclick="setRate(1.0)">1.0X</button>
             <button class="btn-rate active" onclick="setRate(0.85)">0.85X</button>
             <button class="btn-rate" onclick="setRate(0.65)">0.65X</button>
+            <button class="btn-rate" onclick="setRate(0.5)">0.5X</button>
         </div>
 
-        <div class="import-area">
-            <button class="btn btn-import" onclick="document.getElementById('file-input').click()">📁 匯入文件 (.txt)</button>
+        <div class="tools-area">
+            <label>快速輸入工具：雙版本題庫</label>
+            <div class="select-group">
+                <select id="grade-select" onchange="updateSemesters()">
+                    <option value="">-- 請選擇年級 --</option>
+                </select>
+                <select id="semester-select" onchange="updateUnits()">
+                    <option value="">-- 請先選擇年級 --</option>
+                </select>
+                <select id="unit-select">
+                    <option value="">-- 請先選擇學期 --</option>
+                </select>
+            </div>
+            <div>
+                <button class="btn btn-bank" onclick="loadSelectedBank()">⬇️ 載入所選字庫</button>
+                <span style="color: #ccc; margin: 0 5px;">|</span>
+                <button class="btn btn-import" onclick="document.getElementById('file-input').click()">📁 匯入 TXT 檔</button>
+            </div>
             <input type="file" id="file-input" accept=".txt">
-            <span style="font-size: 12px; color: #888;">格式：英文,中文 (每行一個)</span>
         </div>
 
-        <textarea id="word-input" placeholder="在此輸入單字...&#10;apple,蘋果&#10;turn... into...,變成&#10;mean / meant,意思" oninput="autoResize(this)"></textarea>
+        <textarea id="word-input" placeholder="在此輸入單字...&#10;hello,你好" oninput="autoResize(this)"></textarea>
         <br>
         <button class="btn btn-primary" style="width: 100%; padding: 15px;" onclick="initQuiz()">確認並開始測驗</button>
     </div>
 
     <div id="quiz-section" style="display:none;">
-        <h1>聽力測驗(請開聲音)</h1>
+        <h1>聽力測驗</h1>
         <div id="status" class="status-text">準備開始...</div>
         <div id="timer" class="timer-text"></div>
         
@@ -179,21 +224,105 @@
     </div>
 </div>
 
+<script src="wordDatabase.js"></script>
+
 <script>
+    // ==========================================
+    // 程式邏輯區
+    // ==========================================
     let rawWordList = [];
     let currentQuizList = [];
     let currentIndex = 0;
     let countdownInterval;
     let isStopped = false;
     
-    // 新增狀態變數
     let currentRate = 0.85;
     let isPaused = false;
     let currentSpeakTimes = 0;
     let currentWaitSeconds = 0;
-    let quizPhase = 'speaking'; // 'speaking' 或 'counting'
+    let quizPhase = 'speaking'; 
 
-    // --- 語速設定 ---
+    // 初始化讀取「年級」
+    window.onload = function() {
+        const gradeSelect = document.getElementById('grade-select');
+        if (typeof wordDatabase !== 'undefined') {
+            wordDatabase.forEach((g, index) => {
+                let option = document.createElement('option');
+                option.value = index;
+                option.textContent = g.grade;
+                gradeSelect.appendChild(option);
+            });
+        } else {
+            console.error("找不到字庫檔案，請確認 wordDatabase.js 是否與 HTML 放在同一目錄！");
+        }
+    };
+
+    // 年級變更時，更新「學期」
+    function updateSemesters() {
+        const gradeIndex = document.getElementById('grade-select').value;
+        const semSelect = document.getElementById('semester-select');
+        const unitSelect = document.getElementById('unit-select');
+        
+        semSelect.innerHTML = '<option value="">-- 請選擇學期 --</option>';
+        unitSelect.innerHTML = '<option value="">-- 請先選擇學期 --</option>';
+
+        if (gradeIndex === "") return;
+
+        const semesters = wordDatabase[gradeIndex].semesters;
+        semesters.forEach((s, index) => {
+            let option = document.createElement('option');
+            option.value = index;
+            option.textContent = s.semester;
+            semSelect.appendChild(option);
+        });
+    }
+
+    // 學期變更時，更新「單元」
+    function updateUnits() {
+        const gradeIndex = document.getElementById('grade-select').value;
+        const semIndex = document.getElementById('semester-select').value;
+        const unitSelect = document.getElementById('unit-select');
+        
+        unitSelect.innerHTML = '<option value="">-- 請選擇單元 --</option>';
+
+        if (gradeIndex === "" || semIndex === "") {
+            unitSelect.innerHTML = '<option value="">-- 請先選擇學期 --</option>';
+            return;
+        }
+
+        const units = wordDatabase[gradeIndex].semesters[semIndex].units;
+        units.forEach((u, index) => {
+            let option = document.createElement('option');
+            option.value = index;
+            option.textContent = u.unit;
+            unitSelect.appendChild(option);
+        });
+    }
+
+    // 載入所選字庫 (需檢驗三層選單)
+    function loadSelectedBank() {
+        const gradeIndex = document.getElementById('grade-select').value;
+        const semIndex = document.getElementById('semester-select').value;
+        const unitIndex = document.getElementById('unit-select').value;
+
+        if (gradeIndex === "" || semIndex === "" || unitIndex === "") {
+            alert("請先選擇「年級」、「學期」與「單元」再點擊載入！");
+            return;
+        }
+
+        const selectedWords = wordDatabase[gradeIndex].semesters[semIndex].units[unitIndex].words;
+        const textarea = document.getElementById('word-input');
+        
+        if (textarea.value.trim() !== '') {
+            if (!confirm("文字框內已經有單字了，載入字庫將會「覆蓋」目前的內容，確定要繼續嗎？")) {
+                return; 
+            }
+        }
+
+        textarea.value = selectedWords;
+        autoResize(textarea);
+    }
+
     function setRate(rate) {
         currentRate = rate;
         const btns = document.querySelectorAll('.btn-rate');
@@ -206,27 +335,24 @@
         });
     }
 
-    // --- 暫停/播放切換 ---
     function togglePause() {
         if (isPaused) {
-            // 繼續
             isPaused = false;
             document.getElementById('pause-btn').innerText = '⏸ 暫停';
             document.getElementById('pause-btn').classList.replace('btn-primary', 'btn-warning');
             
             if (quizPhase === 'speaking') {
-                playWordCycle(); // 重新開始當前的朗讀循環
+                playWordCycle(); 
             } else {
-                startTimer(currentWaitSeconds); // 繼續剩餘的倒數
+                startTimer(currentWaitSeconds); 
             }
         } else {
-            // 暫停
             isPaused = true;
             document.getElementById('pause-btn').innerText = '▶ 繼續';
             document.getElementById('pause-btn').classList.replace('btn-warning', 'btn-primary');
             
-            window.speechSynthesis.cancel(); // 停止語音
-            clearInterval(countdownInterval); // 停止計時
+            window.speechSynthesis.cancel(); 
+            clearInterval(countdownInterval); 
             document.getElementById('timer').innerText = '(已暫停)';
         }
     }
@@ -239,13 +365,22 @@
     document.getElementById('file-input').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
+        
+        const textarea = document.getElementById('word-input');
+        if (textarea.value.trim() !== '') {
+            if (!confirm("匯入檔案將會「覆蓋」目前的內容，確定要繼續嗎？")) {
+                e.target.value = ''; 
+                return;
+            }
+        }
+
         const reader = new FileReader();
         reader.onload = function(e) {
-            const textarea = document.getElementById('word-input');
             textarea.value = e.target.result;
             autoResize(textarea);
         };
         reader.readAsText(file);
+        e.target.value = ''; 
     });
 
     function initQuiz() {
@@ -261,7 +396,7 @@
             }
         }
         if (rawWordList.length === 0) {
-            alert('請輸入或匯入單字！');
+            alert('請輸入單字、匯入檔案，或從下拉選單載入內建字庫！');
             return;
         }
         startNewQuizSession();
@@ -271,6 +406,7 @@
         isStopped = false;
         isPaused = false;
         document.getElementById('pause-btn').innerText = '⏸ 暫停';
+        document.getElementById('pause-btn').classList.replace('btn-primary', 'btn-warning');
         document.getElementById('pause-btn').style.display = 'inline-block';
 
         currentQuizList = [...rawWordList];
@@ -332,7 +468,7 @@
 
         const msg = new SpeechSynthesisUtterance(textToSpeak);
         msg.lang = 'en-US';
-        msg.rate = currentRate; // 使用設定的語速
+        msg.rate = currentRate; 
         msg.onend = callback;
         window.speechSynthesis.speak(msg);
     }
@@ -376,6 +512,7 @@
         startNewQuizSession();
     }
 
+    // 修正過後的解答顯示，與原始程式碼邏輯相同
     function showAnswers() {
         document.getElementById('quiz-section').style.display = 'none';
         document.getElementById('result-section').style.display = 'block';
